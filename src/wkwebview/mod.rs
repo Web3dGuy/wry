@@ -1213,6 +1213,62 @@ r#"Object.defineProperty(window, 'ipc', {
     }
   }
 
+  /// Takes a snapshot of the webview content and returns timing information.
+  ///
+  /// This is primarily for testing/benchmarking offscreen rendering performance.
+  /// The callback receives the snapshot duration in microseconds and optionally the image data.
+  #[cfg(target_os = "macos")]
+  pub fn take_snapshot<F: FnOnce(std::time::Duration, Option<Vec<u8>>) + Send + 'static>(
+    &self,
+    cb: F,
+  ) {
+    use objc2_app_kit::NSImage;
+    use objc2_web_kit::WKSnapshotConfiguration;
+    use std::time::Instant;
+
+    let start = Instant::now();
+
+    // Create snapshot configuration (None uses default full-view capture)
+    let config = unsafe {
+      let config = WKSnapshotConfiguration::new(self.mtm);
+      // Use default rect (full view) - could be customized
+      config
+    };
+
+    // Make the callback FnOnce-compatible
+    let cb = std::cell::RefCell::new(Some(cb));
+
+    let handler = block2::RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
+      let duration = start.elapsed();
+
+      let image_data = if !image.is_null() && error.is_null() {
+        // Convert NSImage to raw bytes for potential GPU upload
+        // This measures the full pipeline including any data conversion
+        unsafe {
+          let image = &*image;
+          // Get TIFF representation as a common format
+          if let Some(tiff_data) = image.TIFFRepresentation() {
+            Some(tiff_data.to_vec())
+          } else {
+            None
+          }
+        }
+      } else {
+        None
+      };
+
+      if let Some(cb) = cb.take() {
+        cb(duration, image_data);
+      }
+    });
+
+    unsafe {
+      self
+        .webview
+        .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
+    }
+  }
+
   /// Deletes a Data Store by an identifier
   ///
   /// Needs to run on main thread and needs an event loop to run.

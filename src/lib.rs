@@ -2373,6 +2373,22 @@ pub trait WebViewExtMacOS {
   /// Warning: Do not use this if your chosen window library does not support traffic light insets.
   /// Warning: Only use this in **decorated** windows with a **hidden titlebar**!
   fn set_traffic_light_inset<P: Into<dpi::Position>>(&self, position: P) -> Result<()>;
+  /// Takes a snapshot of the webview content and returns timing information.
+  ///
+  /// This is primarily for testing/benchmarking offscreen rendering performance.
+  /// The callback receives the snapshot duration and optionally the image data as TIFF bytes.
+  ///
+  /// Example usage:
+  /// ```ignore
+  /// use wry::WebViewExtMacOS;
+  /// webview.take_snapshot(|duration, image_data| {
+  ///     println!("Snapshot took {:?}", duration);
+  ///     if let Some(data) = image_data {
+  ///         println!("Image size: {} bytes", data.len());
+  ///     }
+  /// });
+  /// ```
+  fn take_snapshot<F: FnOnce(std::time::Duration, Option<Vec<u8>>) + Send + 'static>(&self, cb: F);
 }
 
 #[cfg(target_os = "macos")]
@@ -2399,6 +2415,10 @@ impl WebViewExtMacOS for WebView {
 
   fn set_traffic_light_inset<P: Into<dpi::Position>>(&self, position: P) -> Result<()> {
     self.webview.set_traffic_light_inset(position.into())
+  }
+
+  fn take_snapshot<F: FnOnce(std::time::Duration, Option<Vec<u8>>) + Send + 'static>(&self, cb: F) {
+    self.webview.take_snapshot(cb)
   }
 }
 

@@ -132,6 +132,7 @@ objc2-web-kit = { version = "0.3.0", default-features = false, features = [
   "WKUserScript",
   "WKHTTPCookieStore",
   "WKWindowFeatures",
+  "WKSnapshotConfiguration",
 ] }
 objc2-core-foundation = { version = "0.3.0", default-features = false, features = [
   "std",
@@ -191,6 +192,8 @@ objc2-app-kit = { version = "0.3.0", default-features = false, features = [
   "NSMenu",
   "NSGraphics",
   "NSScreen",
+  "NSImage",
+  "NSBitmapImageRep",
 ] }
 
 [target."cfg(target_os = \"android\")".dependencies]
