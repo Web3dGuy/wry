@@ -2159,6 +2159,56 @@ impl WebView {
   pub fn focus_parent(&self) -> Result<()> {
     self.webview.focus_parent()
   }
+
+  /// Moves this webview to the front (top) of the z-order within its parent.
+  ///
+  /// After calling this, the webview will render on top of all sibling webviews.
+  /// This is useful for bringing UI overlay webviews above content webviews.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Implemented using NSView z-ordering.
+  /// - **Windows**: Not yet implemented (returns `Ok(())`).
+  /// - **Linux**: Not yet implemented (returns `Ok(())`).
+  /// - **Android/iOS**: Not supported (returns `Ok(())`).
+  ///
+  /// ## Example
+  ///
+  /// ```no_run
+  /// # use wry::{WebViewBuilder, Rect};
+  /// # fn main() -> wry::Result<()> {
+  /// # let window: &dyn raw_window_handle::HasWindowHandle = todo!();
+  /// // Create two overlapping webviews
+  /// let content_webview = WebViewBuilder::new()
+  ///     .with_url("https://example.com")
+  ///     .build_as_child(window)?;
+  ///
+  /// let ui_webview = WebViewBuilder::new()
+  ///     .with_html("<h1>UI Overlay</h1>")
+  ///     .build_as_child(window)?;
+  ///
+  /// // Later, bring content webview to front (above UI webview)
+  /// content_webview.bring_to_front()?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  pub fn bring_to_front(&self) -> Result<()> {
+    self.webview.bring_to_front()
+  }
+
+  /// Moves this webview to the back (bottom) of the z-order within its parent.
+  ///
+  /// After calling this, the webview will render behind all sibling webviews.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Implemented using NSView z-ordering.
+  /// - **Windows**: Not yet implemented (returns `Ok(())`).
+  /// - **Linux**: Not yet implemented (returns `Ok(())`).
+  /// - **Android/iOS**: Not supported (returns `Ok(())`).
+  pub fn send_to_back(&self) -> Result<()> {
+    self.webview.send_to_back()
+  }
 }
 
 /// An event describing drag and drop operations on the webview.

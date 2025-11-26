@@ -1128,6 +1128,39 @@ impl InnerWebView {
 
     Ok(())
   }
+
+  /// Brings this webview to the front of the z-order.
+  ///
+  /// TODO: Research GTK z-ordering options:
+  /// - For gtk::Fixed: remove and re-add widget (later additions are on top)
+  /// - For gtk::Box: may need different approach or use gtk::Overlay
+  /// - CSS z-index only works in GTK4; WRY currently uses GTK3
+  ///
+  /// Potential implementation approach for gtk::Fixed:
+  /// ```ignore
+  /// if let Some(parent) = self.webview.parent() {
+  ///   if let Some(fixed) = parent.dynamic_cast_ref::<gtk::Fixed>() {
+  ///     let (x, y) = /* get current position */;
+  ///     fixed.remove(&self.webview);
+  ///     fixed.put(&self.webview, x, y); // Re-adding puts it on top
+  ///   }
+  /// }
+  /// ```
+  pub fn bring_to_front(&self) -> Result<()> {
+    // Stub: Linux/GTK implementation pending
+    Ok(())
+  }
+
+  /// Sends this webview to the back of the z-order.
+  ///
+  /// TODO: Research GTK z-ordering options for sending to back.
+  /// This is more complex than bring_to_front since GTK doesn't have
+  /// a direct "send to back" API. May require tracking sibling order
+  /// and re-adding widgets in the correct sequence.
+  pub fn send_to_back(&self) -> Result<()> {
+    // Stub: Linux/GTK implementation pending
+    Ok(())
+  }
 }
 
 pub fn platform_webview_version() -> Result<String> {

@@ -453,6 +453,24 @@ impl InnerWebView {
     // Unsupported
     Ok(())
   }
+
+  /// Brings this webview to the front of the z-order.
+  ///
+  /// Android WebView doesn't support programmatic z-ordering within the
+  /// view hierarchy in the same way as desktop platforms. This is a no-op.
+  pub fn bring_to_front(&self) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
+
+  /// Sends this webview to the back of the z-order.
+  ///
+  /// Android WebView doesn't support programmatic z-ordering within the
+  /// view hierarchy in the same way as desktop platforms. This is a no-op.
+  pub fn send_to_back(&self) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
 }
 
 #[derive(Clone, Copy)]

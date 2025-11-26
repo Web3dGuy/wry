@@ -1269,6 +1269,72 @@ r#"Object.defineProperty(window, 'ipc', {
     }
   }
 
+  /// Brings this webview to the front of the z-order among its siblings.
+  ///
+  /// After calling this, the webview will render on top of all other sibling webviews
+  /// within the same parent view.
+  #[cfg(target_os = "macos")]
+  pub fn bring_to_front(&self) -> crate::Result<()> {
+    use objc2_app_kit::NSWindowOrderingMode;
+
+    unsafe {
+      if let Some(superview) = self.webview.superview() {
+        // addSubview:positioned:relativeTo: with nil reference and .Above
+        // positions the view at the top of the z-order (frontmost)
+        superview.addSubview_positioned_relativeTo(
+          &self.webview,
+          NSWindowOrderingMode::Above,
+          None,
+        );
+      }
+    }
+    Ok(())
+  }
+
+  /// Sends this webview to the back of the z-order among its siblings.
+  ///
+  /// After calling this, the webview will render behind all other sibling webviews
+  /// within the same parent view.
+  #[cfg(target_os = "macos")]
+  pub fn send_to_back(&self) -> crate::Result<()> {
+    use objc2_app_kit::NSWindowOrderingMode;
+
+    unsafe {
+      if let Some(superview) = self.webview.superview() {
+        // addSubview:positioned:relativeTo: with nil reference and .Below
+        // positions the view at the bottom of the z-order (backmost)
+        superview.addSubview_positioned_relativeTo(
+          &self.webview,
+          NSWindowOrderingMode::Below,
+          None,
+        );
+      }
+    }
+    Ok(())
+  }
+
+  /// Brings this webview to the front of the z-order among its siblings.
+  ///
+  /// iOS stub - z-order control is not yet implemented on iOS.
+  /// UIKit uses different APIs than AppKit for view ordering.
+  #[cfg(target_os = "ios")]
+  pub fn bring_to_front(&self) -> crate::Result<()> {
+    // TODO: Implement using UIView.bringSubviewToFront(_:) on the superview
+    // or UIView.insertSubview(_:aboveSubview:)
+    Ok(())
+  }
+
+  /// Sends this webview to the back of the z-order among its siblings.
+  ///
+  /// iOS stub - z-order control is not yet implemented on iOS.
+  /// UIKit uses different APIs than AppKit for view ordering.
+  #[cfg(target_os = "ios")]
+  pub fn send_to_back(&self) -> crate::Result<()> {
+    // TODO: Implement using UIView.sendSubviewToBack(_:) on the superview
+    // or UIView.insertSubview(_:belowSubview:)
+    Ok(())
+  }
+
   /// Deletes a Data Store by an identifier
   ///
   /// Needs to run on main thread and needs an event loop to run.

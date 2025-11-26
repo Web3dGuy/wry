@@ -1741,6 +1741,44 @@ impl InnerWebView {
   pub fn is_devtools_open(&self) -> bool {
     false
   }
+
+  /// Brings this webview to the front of the z-order.
+  ///
+  /// TODO: Implement using SetWindowPos with HWND_TOP
+  /// ```ignore
+  /// unsafe {
+  ///   SetWindowPos(
+  ///     self.hwnd,
+  ///     HWND_TOP,
+  ///     0, 0, 0, 0,
+  ///     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+  ///   )?;
+  /// }
+  /// ```
+  /// See: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos
+  pub fn bring_to_front(&self) -> Result<()> {
+    // Stub: Windows implementation pending
+    Ok(())
+  }
+
+  /// Sends this webview to the back of the z-order.
+  ///
+  /// TODO: Implement using SetWindowPos with HWND_BOTTOM
+  /// ```ignore
+  /// unsafe {
+  ///   SetWindowPos(
+  ///     self.hwnd,
+  ///     HWND_BOTTOM,
+  ///     0, 0, 0, 0,
+  ///     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+  ///   )?;
+  /// }
+  /// ```
+  /// See: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos
+  pub fn send_to_back(&self) -> Result<()> {
+    // Stub: Windows implementation pending
+    Ok(())
+  }
 }
 
 /// The scrollbar style to use in the webview.
