@@ -160,3 +160,8 @@ Benchmarks show ~1.4ms average latency - viable for 60fps if needed.
 - `examples/z_order_test.rs` - Interactive z-order test
 - `examples/snapshot_timing.rs` - Snapshot performance benchmark
 - `examples/compositing_test.rs` - Original z-order research test
+
+## Related Repositories
+
+- **Tauri fork**: `/Volumes/Vault/Workspace/tauri` - Forked to add z-order support
+- **eidolon**: `/Volumes/Vault/Workspace/eidolon` - Target application using this
