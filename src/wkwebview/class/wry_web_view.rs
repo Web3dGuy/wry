@@ -179,6 +179,9 @@ fn hit_test_impl(
   // Get the frame to check bounds and convert Y coordinate
   let frame: CGRect = unsafe { objc2::msg_send![view, frame] };
 
+  // Check if view is flipped (WKWebView typically IS flipped)
+  let is_flipped: bool = unsafe { objc2::msg_send![view, isFlipped] };
+
   // Check if point is within our frame bounds
   let in_bounds = local_point.x >= 0.0
     && local_point.y >= 0.0
@@ -189,15 +192,18 @@ fn hit_test_impl(
     return None;
   }
 
-  // Convert from macOS coordinates (bottom-left origin, Y-up)
-  // to web coordinates (top-left origin, Y-down)
-  let web_y = frame.size.height - local_point.y;
+  // If view is flipped, local_point.y is already in web coordinates (top-left origin)
+  // If not flipped, we need to convert from macOS coords (bottom-left origin)
+  let web_y = if is_flipped {
+    local_point.y
+  } else {
+    frame.size.height - local_point.y
+  };
 
   // Check if point is in any active region
   let in_active_region = {
     let regions = view.ivars().hit_regions.lock().unwrap();
     regions.iter().any(|(_, rect)| {
-      // Regions are stored in web coordinates (top-left origin)
       local_point.x >= rect.origin.x
         && local_point.x <= rect.origin.x + rect.size.width
         && web_y >= rect.origin.y
