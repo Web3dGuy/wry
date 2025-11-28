@@ -471,6 +471,53 @@ impl InnerWebView {
     // Unsupported on Android
     Ok(())
   }
+
+  /// Sets the hit-test mode for this webview.
+  ///
+  /// Android no-op - not supported.
+  pub fn set_hit_test_mode(&self, _mode: crate::HitTestMode) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
+
+  /// Gets the current hit-test mode.
+  ///
+  /// Android no-op - always returns Normal.
+  pub fn hit_test_mode(&self) -> crate::HitTestMode {
+    crate::HitTestMode::Normal
+  }
+
+  /// Sets the interactive regions for RegionBased mode.
+  ///
+  /// Android no-op - not supported.
+  pub fn set_hit_regions(&self, _regions: Vec<crate::Rect>) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
+
+  /// Adds a single interactive region and returns its ID.
+  ///
+  /// Android no-op - not supported.
+  pub fn add_hit_region(&self, _bounds: crate::Rect) -> Result<crate::HitRegionId> {
+    // Unsupported on Android
+    Ok(crate::HitRegionId(0))
+  }
+
+  /// Removes a previously added region by ID.
+  ///
+  /// Android no-op - not supported.
+  pub fn remove_hit_region(&self, _id: crate::HitRegionId) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
+
+  /// Clears all hit-test regions.
+  ///
+  /// Android no-op - not supported.
+  pub fn clear_hit_regions(&self) -> Result<()> {
+    // Unsupported on Android
+    Ok(())
+  }
 }
 
 #[derive(Clone, Copy)]

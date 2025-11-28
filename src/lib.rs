@@ -432,6 +432,33 @@ impl Default for Rect {
   }
 }
 
+/// Defines how a webview handles hit testing for mouse events.
+///
+/// This is useful for creating overlay UIs where certain regions should pass
+/// mouse events through to views beneath.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum HitTestMode {
+  /// Normal behavior - all mouse events are captured by this webview.
+  #[default]
+  Normal,
+
+  /// Only capture events in explicitly defined regions.
+  /// Events outside these regions pass through to views beneath.
+  ///
+  /// Use [`WebView::set_hit_regions`] to define the interactive regions.
+  RegionBased,
+
+  /// All events pass through - webview is completely non-interactive.
+  /// Useful for purely visual overlays.
+  PassThrough,
+}
+
+/// A unique identifier for a hit-test region.
+///
+/// Returned by [`WebView::add_hit_region`] for later removal with [`WebView::remove_hit_region`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HitRegionId(pub u64);
+
 /// Resolves a custom protocol [`Request`] asynchronously.
 ///
 /// See [`WebViewBuilder::with_asynchronous_custom_protocol`] for more information.
@@ -792,6 +819,26 @@ pub struct WebViewAttributes<'a> {
 
   /// Whether JavaScript should be disabled.
   pub javascript_disabled: bool,
+
+  /// The hit-test mode for the webview.
+  ///
+  /// See [`HitTestMode`] for details.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS/Android**: Stub, has no effect
+  pub hit_test_mode: HitTestMode,
+
+  /// Initial hit-test regions for [`HitTestMode::RegionBased`] mode.
+  ///
+  /// Coordinates are in logical pixels relative to the webview's origin.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS/Android**: Stub, has no effect
+  pub hit_regions: Vec<Rect>,
 }
 
 impl Default for WebViewAttributes<'_> {
@@ -834,6 +881,8 @@ impl Default for WebViewAttributes<'_> {
       }),
       background_throttling: None,
       javascript_disabled: false,
+      hit_test_mode: HitTestMode::Normal,
+      hit_regions: Vec::new(),
     }
   }
 }
@@ -1402,6 +1451,33 @@ impl<'a> WebViewBuilder<'a> {
   /// Whether JavaScript should be disabled.
   pub fn with_javascript_disabled(mut self) -> Self {
     self.attrs.javascript_disabled = true;
+    self
+  }
+
+  /// Sets the initial hit-test mode for the webview.
+  ///
+  /// See [`HitTestMode`] for details.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS/Android**: Stub, has no effect
+  pub fn with_hit_test_mode(mut self, mode: HitTestMode) -> Self {
+    self.attrs.hit_test_mode = mode;
+    self
+  }
+
+  /// Sets the initial interactive regions (implies [`HitTestMode::RegionBased`] mode).
+  ///
+  /// Coordinates are in logical pixels relative to the webview's origin.
+  ///
+  /// ## Platform-specific
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS/Android**: Stub, has no effect
+  pub fn with_hit_regions(mut self, regions: Vec<Rect>) -> Self {
+    self.attrs.hit_test_mode = HitTestMode::RegionBased;
+    self.attrs.hit_regions = regions;
     self
   }
 
@@ -2208,6 +2284,121 @@ impl WebView {
   /// - **Android/iOS**: Not supported (returns `Ok(())`).
   pub fn send_to_back(&self) -> Result<()> {
     self.webview.send_to_back()
+  }
+
+  /// Sets the hit-test mode for this webview.
+  ///
+  /// This controls how the webview handles mouse events:
+  /// - [`HitTestMode::Normal`]: All events captured (default)
+  /// - [`HitTestMode::RegionBased`]: Only capture in defined regions, passthrough elsewhere
+  /// - [`HitTestMode::PassThrough`]: All events pass through
+  ///
+  /// ## Platform Support
+  ///
+  /// - **macOS**: Full support via NSView hitTest: override
+  /// - **Windows**: Stub (returns `Ok(())`)
+  /// - **Linux**: Stub (returns `Ok(())`)
+  /// - **iOS**: Stub (returns `Ok(())`)
+  /// - **Android**: No-op (returns `Ok(())`)
+  ///
+  /// ## Example
+  ///
+  /// ```no_run
+  /// # use wry::{WebViewBuilder, HitTestMode, Rect};
+  /// # fn main() -> wry::Result<()> {
+  /// # let window: &dyn raw_window_handle::HasWindowHandle = todo!();
+  /// let ui_webview = WebViewBuilder::new()
+  ///     .with_html("<h1>UI Overlay</h1>")
+  ///     .with_transparent(true)
+  ///     .build_as_child(window)?;
+  ///
+  /// // Set to region-based mode where only defined regions capture events
+  /// ui_webview.set_hit_test_mode(HitTestMode::RegionBased)?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  pub fn set_hit_test_mode(&self, mode: HitTestMode) -> Result<()> {
+    self.webview.set_hit_test_mode(mode)
+  }
+
+  /// Gets the current hit-test mode for this webview.
+  pub fn hit_test_mode(&self) -> HitTestMode {
+    self.webview.hit_test_mode()
+  }
+
+  /// Sets the interactive regions for [`HitTestMode::RegionBased`] mode.
+  ///
+  /// Replaces any existing regions. Events in these regions are captured;
+  /// events outside pass through to views beneath.
+  ///
+  /// Coordinates are in logical pixels relative to the webview's origin,
+  /// with the origin at the top-left corner.
+  ///
+  /// ## Platform Support
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS**: Stub (returns `Ok(())`)
+  /// - **Android**: No-op (returns `Ok(())`)
+  ///
+  /// ## Example
+  ///
+  /// ```no_run
+  /// # use wry::{WebViewBuilder, HitTestMode, Rect, dpi::*};
+  /// # fn main() -> wry::Result<()> {
+  /// # let window: &dyn raw_window_handle::HasWindowHandle = todo!();
+  /// let ui_webview = WebViewBuilder::new()
+  ///     .with_html("<h1>UI</h1>")
+  ///     .build_as_child(window)?;
+  ///
+  /// ui_webview.set_hit_test_mode(HitTestMode::RegionBased)?;
+  ///
+  /// // Define interactive regions (toolbar, sidebar)
+  /// ui_webview.set_hit_regions(vec![
+  ///     Rect { position: LogicalPosition::new(0, 0).into(), size: LogicalSize::new(800, 50).into() }, // toolbar
+  ///     Rect { position: LogicalPosition::new(0, 50).into(), size: LogicalSize::new(200, 550).into() }, // sidebar
+  /// ])?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  pub fn set_hit_regions(&self, regions: Vec<Rect>) -> Result<()> {
+    self.webview.set_hit_regions(regions)
+  }
+
+  /// Adds a single interactive region and returns its ID for later removal.
+  ///
+  /// Useful for dynamically adding regions (e.g., when a dropdown opens).
+  ///
+  /// ## Platform Support
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS**: Stub (returns `Ok(HitRegionId(0))`)
+  /// - **Android**: No-op (returns `Ok(HitRegionId(0))`)
+  pub fn add_hit_region(&self, bounds: Rect) -> Result<HitRegionId> {
+    self.webview.add_hit_region(bounds)
+  }
+
+  /// Removes a previously added region by ID.
+  ///
+  /// Useful for dynamically removing regions (e.g., when a dropdown closes).
+  ///
+  /// ## Platform Support
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS**: Stub (returns `Ok(())`)
+  /// - **Android**: No-op (returns `Ok(())`)
+  pub fn remove_hit_region(&self, id: HitRegionId) -> Result<()> {
+    self.webview.remove_hit_region(id)
+  }
+
+  /// Clears all hit-test regions.
+  ///
+  /// ## Platform Support
+  ///
+  /// - **macOS**: Full support
+  /// - **Windows/Linux/iOS**: Stub (returns `Ok(())`)
+  /// - **Android**: No-op (returns `Ok(())`)
+  pub fn clear_hit_regions(&self) -> Result<()> {
+    self.webview.clear_hit_regions()
   }
 }
 

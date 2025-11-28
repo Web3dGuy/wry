@@ -294,6 +294,27 @@ impl InnerWebView {
 
       // WebView and manager
       let manager = config.userContentController();
+
+      // Convert initial hit regions to CGRects in web coordinates (top-left origin)
+      #[cfg(target_os = "macos")]
+      let initial_hit_regions: Vec<(u64, CGRect)> = attributes
+        .hit_regions
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+          // Get logical position/size (scale factor will be applied when we have the window)
+          let pos = r.position.to_logical::<f64>(1.0);
+          let size = r.size.to_logical::<f64>(1.0);
+          (
+            i as u64,
+            CGRect::new(
+              CGPoint::new(pos.x, pos.y),
+              CGSize::new(size.width, size.height),
+            ),
+          )
+        })
+        .collect();
+
       let webview = WryWebView::alloc(mtm).set_ivars(WryWebViewIvars {
         is_child,
         #[cfg(target_os = "macos")]
@@ -306,6 +327,10 @@ impl InnerWebView {
         #[cfg(target_os = "ios")]
         input_accessory_view_builder: pl_attrs.input_accessory_view_builder,
         custom_protocol_task_ids: Default::default(),
+        hit_test_mode: std::cell::Cell::new(attributes.hit_test_mode),
+        #[cfg(target_os = "macos")]
+        hit_regions: Mutex::new(initial_hit_regions),
+        hit_region_counter: std::sync::atomic::AtomicU64::new(attributes.hit_regions.len() as u64),
       });
 
       let _preference = config.preferences();
@@ -1332,6 +1357,142 @@ r#"Object.defineProperty(window, 'ipc', {
   pub fn send_to_back(&self) -> crate::Result<()> {
     // TODO: Implement using UIView.sendSubviewToBack(_:) on the superview
     // or UIView.insertSubview(_:belowSubview:)
+    Ok(())
+  }
+
+  /// Sets the hit-test mode for this webview.
+  #[cfg(target_os = "macos")]
+  pub fn set_hit_test_mode(&self, mode: crate::HitTestMode) -> crate::Result<()> {
+    self.webview.ivars().hit_test_mode.set(mode);
+    Ok(())
+  }
+
+  /// Sets the hit-test mode for this webview.
+  ///
+  /// iOS stub - not yet implemented.
+  #[cfg(target_os = "ios")]
+  pub fn set_hit_test_mode(&self, mode: crate::HitTestMode) -> crate::Result<()> {
+    self.webview.ivars().hit_test_mode.set(mode);
+    // TODO: Implement iOS hit-test override
+    Ok(())
+  }
+
+  /// Gets the current hit-test mode.
+  pub fn hit_test_mode(&self) -> crate::HitTestMode {
+    self.webview.ivars().hit_test_mode.get()
+  }
+
+  /// Sets the interactive regions for RegionBased mode.
+  #[cfg(target_os = "macos")]
+  pub fn set_hit_regions(&self, regions: Vec<crate::Rect>) -> crate::Result<()> {
+    use std::sync::atomic::Ordering;
+
+    let cg_rects: Vec<(u64, CGRect)> = regions
+      .into_iter()
+      .enumerate()
+      .map(|(i, r)| {
+        // Convert logical coordinates to CGRect
+        // Regions use web coordinates (top-left origin)
+        let pos = r.position.to_logical::<f64>(1.0);
+        let size = r.size.to_logical::<f64>(1.0);
+        (
+          i as u64,
+          CGRect::new(
+            CGPoint::new(pos.x, pos.y),
+            CGSize::new(size.width, size.height),
+          ),
+        )
+      })
+      .collect();
+
+    // Update the counter to be past all assigned IDs
+    self
+      .webview
+      .ivars()
+      .hit_region_counter
+      .store(cg_rects.len() as u64, Ordering::SeqCst);
+
+    *self.webview.ivars().hit_regions.lock().unwrap() = cg_rects;
+    Ok(())
+  }
+
+  /// Sets the interactive regions for RegionBased mode.
+  ///
+  /// iOS stub - not yet implemented.
+  #[cfg(target_os = "ios")]
+  pub fn set_hit_regions(&self, _regions: Vec<crate::Rect>) -> crate::Result<()> {
+    // TODO: Implement iOS hit regions
+    Ok(())
+  }
+
+  /// Adds a single interactive region and returns its ID.
+  #[cfg(target_os = "macos")]
+  pub fn add_hit_region(&self, bounds: crate::Rect) -> crate::Result<crate::HitRegionId> {
+    use std::sync::atomic::Ordering;
+
+    let id = self
+      .webview
+      .ivars()
+      .hit_region_counter
+      .fetch_add(1, Ordering::SeqCst);
+
+    let pos = bounds.position.to_logical::<f64>(1.0);
+    let size = bounds.size.to_logical::<f64>(1.0);
+    let cg_rect = CGRect::new(
+      CGPoint::new(pos.x, pos.y),
+      CGSize::new(size.width, size.height),
+    );
+
+    self
+      .webview
+      .ivars()
+      .hit_regions
+      .lock()
+      .unwrap()
+      .push((id, cg_rect));
+
+    Ok(crate::HitRegionId(id))
+  }
+
+  /// Adds a single interactive region and returns its ID.
+  ///
+  /// iOS stub - not yet implemented.
+  #[cfg(target_os = "ios")]
+  pub fn add_hit_region(&self, _bounds: crate::Rect) -> crate::Result<crate::HitRegionId> {
+    // TODO: Implement iOS hit region add
+    Ok(crate::HitRegionId(0))
+  }
+
+  /// Removes a previously added region by ID.
+  #[cfg(target_os = "macos")]
+  pub fn remove_hit_region(&self, id: crate::HitRegionId) -> crate::Result<()> {
+    let mut regions = self.webview.ivars().hit_regions.lock().unwrap();
+    regions.retain(|(region_id, _)| *region_id != id.0);
+    Ok(())
+  }
+
+  /// Removes a previously added region by ID.
+  ///
+  /// iOS stub - not yet implemented.
+  #[cfg(target_os = "ios")]
+  pub fn remove_hit_region(&self, _id: crate::HitRegionId) -> crate::Result<()> {
+    // TODO: Implement iOS hit region remove
+    Ok(())
+  }
+
+  /// Clears all hit-test regions.
+  #[cfg(target_os = "macos")]
+  pub fn clear_hit_regions(&self) -> crate::Result<()> {
+    self.webview.ivars().hit_regions.lock().unwrap().clear();
+    Ok(())
+  }
+
+  /// Clears all hit-test regions.
+  ///
+  /// iOS stub - not yet implemented.
+  #[cfg(target_os = "ios")]
+  pub fn clear_hit_regions(&self) -> crate::Result<()> {
+    // TODO: Implement iOS clear hit regions
     Ok(())
   }
 

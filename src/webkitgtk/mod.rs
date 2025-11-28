@@ -1161,6 +1161,53 @@ impl InnerWebView {
     // Stub: Linux/GTK implementation pending
     Ok(())
   }
+
+  /// Sets the hit-test mode for this webview.
+  ///
+  /// Linux stub - not yet implemented.
+  pub fn set_hit_test_mode(&self, _mode: crate::HitTestMode) -> Result<()> {
+    // TODO: Implement using GDK input shape mask or similar
+    Ok(())
+  }
+
+  /// Gets the current hit-test mode.
+  ///
+  /// Linux stub - always returns Normal.
+  pub fn hit_test_mode(&self) -> crate::HitTestMode {
+    crate::HitTestMode::Normal
+  }
+
+  /// Sets the interactive regions for RegionBased mode.
+  ///
+  /// Linux stub - not yet implemented.
+  pub fn set_hit_regions(&self, _regions: Vec<crate::Rect>) -> Result<()> {
+    // TODO: Implement Linux hit regions
+    Ok(())
+  }
+
+  /// Adds a single interactive region and returns its ID.
+  ///
+  /// Linux stub - not yet implemented.
+  pub fn add_hit_region(&self, _bounds: crate::Rect) -> Result<crate::HitRegionId> {
+    // TODO: Implement Linux hit region add
+    Ok(crate::HitRegionId(0))
+  }
+
+  /// Removes a previously added region by ID.
+  ///
+  /// Linux stub - not yet implemented.
+  pub fn remove_hit_region(&self, _id: crate::HitRegionId) -> Result<()> {
+    // TODO: Implement Linux hit region remove
+    Ok(())
+  }
+
+  /// Clears all hit-test regions.
+  ///
+  /// Linux stub - not yet implemented.
+  pub fn clear_hit_regions(&self) -> Result<()> {
+    // TODO: Implement Linux clear hit regions
+    Ok(())
+  }
 }
 
 pub fn platform_webview_version() -> Result<String> {

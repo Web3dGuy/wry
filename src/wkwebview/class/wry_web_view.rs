@@ -2,17 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+  cell::Cell,
+  collections::HashMap,
+  sync::{atomic::AtomicU64, Mutex},
+};
 
 #[cfg(target_os = "macos")]
 use objc2::runtime::ProtocolObject;
 use objc2::{define_class, rc::Retained, runtime::Bool, DeclaredClass};
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSDraggingDestination, NSEvent};
+use objc2_app_kit::{NSDraggingDestination, NSEvent, NSView};
 use objc2_foundation::{NSObjectProtocol, NSUUID};
+
+#[cfg(target_os = "macos")]
+use objc2_core_foundation::{CGPoint, CGRect};
 
 #[cfg(target_os = "ios")]
 use crate::wkwebview::ios::WKWebView::WKWebView;
+use crate::HitTestMode;
 #[cfg(target_os = "macos")]
 use crate::{
   wkwebview::{drag_drop, synthetic_mouse_events},
@@ -32,6 +40,17 @@ pub struct WryWebViewIvars {
   #[cfg(target_os = "ios")]
   pub(crate) input_accessory_view_builder: Option<Box<crate::InputAccessoryViewBuilder>>,
   pub(crate) custom_protocol_task_ids: Mutex<HashMap<usize, Retained<NSUUID>>>,
+
+  /// Current hit-test mode
+  pub(crate) hit_test_mode: Cell<HitTestMode>,
+
+  /// Interactive regions (only used in RegionBased mode)
+  /// Stored as (id, CGRect in webview-local coordinates with top-left origin)
+  #[cfg(target_os = "macos")]
+  pub(crate) hit_regions: Mutex<Vec<(u64, CGRect)>>,
+
+  /// Counter for generating unique region IDs
+  pub(crate) hit_region_counter: AtomicU64,
 }
 
 define_class!(
@@ -60,6 +79,16 @@ define_class!(
     #[unsafe(method(acceptsFirstMouse:))]
     fn accept_first_mouse(&self, _event: &NSEvent) -> Bool {
       self.ivars().accept_first_mouse
+    }
+
+    /// Override hitTest: to support region-based and passthrough hit testing.
+    ///
+    /// hitTest: receives a point in the superview's coordinate system and returns
+    /// the deepest subview that should receive the event, or nil to pass through.
+    #[cfg(target_os = "macos")]
+    #[unsafe(method_id(hitTest:))]
+    fn hit_test(&self, point: objc2_core_foundation::CGPoint) -> Option<Retained<NSView>> {
+      hit_test_impl(self, point)
     }
 
     #[cfg(target_os = "ios")]
@@ -121,6 +150,69 @@ define_class!(
     }
   }
 );
+
+/// Implementation of hit-test logic extracted to avoid macro issues with early returns.
+#[cfg(target_os = "macos")]
+fn hit_test_impl(
+  view: &WryWebView,
+  point: objc2_core_foundation::CGPoint,
+) -> Option<Retained<NSView>> {
+  use HitTestMode::*;
+
+  let mode = view.ivars().hit_test_mode.get();
+
+  // PassThrough mode - never capture events
+  if matches!(mode, PassThrough) {
+    return None;
+  }
+
+  // Normal mode - default behavior
+  if matches!(mode, Normal) {
+    return unsafe { objc2::msg_send![super(view), hitTest: point] };
+  }
+
+  // RegionBased mode - check if point is in an interactive region
+  // Convert point to local coordinates (hitTest: receives superview coordinates)
+  let local_point: CGPoint =
+    unsafe { objc2::msg_send![view, convertPoint: point, fromView: std::ptr::null::<NSView>()] };
+
+  // Get the frame to check bounds and convert Y coordinate
+  let frame: CGRect = unsafe { objc2::msg_send![view, frame] };
+
+  // Check if point is within our frame bounds
+  let in_bounds = local_point.x >= 0.0
+    && local_point.y >= 0.0
+    && local_point.x <= frame.size.width
+    && local_point.y <= frame.size.height;
+
+  if !in_bounds {
+    return None;
+  }
+
+  // Convert from macOS coordinates (bottom-left origin, Y-up)
+  // to web coordinates (top-left origin, Y-down)
+  let web_y = frame.size.height - local_point.y;
+
+  // Check if point is in any active region
+  let in_active_region = {
+    let regions = view.ivars().hit_regions.lock().unwrap();
+    regions.iter().any(|(_, rect)| {
+      // Regions are stored in web coordinates (top-left origin)
+      local_point.x >= rect.origin.x
+        && local_point.x <= rect.origin.x + rect.size.width
+        && web_y >= rect.origin.y
+        && web_y <= rect.origin.y + rect.size.height
+    })
+  };
+
+  if in_active_region {
+    // Point is in an interactive region - handle normally
+    unsafe { objc2::msg_send![super(view), hitTest: point] }
+  } else {
+    // Point is outside interactive regions - pass through
+    None
+  }
+}
 
 // Custom Protocol Task Checker
 impl WryWebView {

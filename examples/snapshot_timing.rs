@@ -195,10 +195,7 @@ fn main() -> wry::Result<()> {
             println!("  Average: {:?}", avg);
             println!("  Min:     {:?}", min);
             println!("  Max:     {:?}", max);
-            println!(
-              "  Theoretical FPS: {:.1}",
-              1000.0 / avg.as_millis() as f64
-            );
+            println!("  Theoretical FPS: {:.1}", 1000.0 / avg.as_millis() as f64);
             println!(
               "  60fps capable: {}",
               if avg.as_millis() < 17 { "YES" } else { "NO" }
