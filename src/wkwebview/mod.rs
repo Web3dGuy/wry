@@ -480,11 +480,9 @@ impl InnerWebView {
 
       #[cfg(target_os = "macos")]
       {
-        if is_child {
-          // fixed element
-          webview.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinYMargin);
-        } else {
-          // Auto-resize
+        // For child webviews, autoresizing is set later when wrapping in container.
+        // For main webviews, auto-resize to fill window.
+        if !is_child {
           webview.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewHeightSizable
               | NSAutoresizingMaskOptions::ViewWidthSizable,
@@ -639,7 +637,32 @@ r#"Object.defineProperty(window, 'ipc', {
       #[cfg(target_os = "macos")]
       {
         if is_child {
-          ns_view.addSubview(&webview);
+          // Create a container view for the child webview.
+          // This ensures the WebKit inspector docks to the correct bounds,
+          // as it uses the superview's frame for its docked position.
+          let container = WryWebViewParent::new(mtm);
+
+          // Set container frame to match the webview's initial frame
+          container.setFrame(webview.frame());
+
+          // Container should not auto-resize with parent (we control its position)
+          container.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinYMargin);
+
+          // Webview fills the container and auto-resizes with it
+          webview.setAutoresizingMask(
+            NSAutoresizingMaskOptions::ViewHeightSizable
+              | NSAutoresizingMaskOptions::ViewWidthSizable,
+          );
+          webview.setFrame(CGRect {
+            origin: CGPoint::new(0.0, 0.0),
+            size: container.frame().size,
+          });
+
+          // Add webview to container, container to window content view
+          container.addSubview(&webview);
+          ns_view.addSubview(&container);
+
+          w.parent_view = Some(container);
         } else {
           // inject the webview into the window
           let ns_window = ns_view.window().unwrap();
@@ -936,17 +959,30 @@ r#"Object.defineProperty(window, 'ipc', {
   pub fn bounds(&self) -> crate::Result<Rect> {
     #[allow(unused_unsafe)]
     unsafe {
-      let parent = self.webview.superview().unwrap();
-      let parent_frame = parent.frame();
-      let webview_frame = self.webview.frame();
+      // For child webviews with a container, return the container's bounds.
+      // The container's frame represents the actual positioned bounds.
+      #[cfg(target_os = "macos")]
+      let (view_frame, parent_frame) = if let Some(container) = &self.parent_view {
+        let content_view = container.superview().unwrap();
+        (container.frame(), content_view.frame())
+      } else {
+        let parent = self.webview.superview().unwrap();
+        (self.webview.frame(), parent.frame())
+      };
+
+      #[cfg(not(target_os = "macos"))]
+      let (view_frame, parent_frame) = {
+        let parent = self.webview.superview().unwrap();
+        (self.webview.frame(), parent.frame())
+      };
 
       Ok(Rect {
         position: LogicalPosition::new(
-          webview_frame.origin.x,
-          parent_frame.size.height - webview_frame.origin.y - webview_frame.size.height,
+          view_frame.origin.x,
+          parent_frame.size.height - view_frame.origin.y - view_frame.size.height,
         )
         .into(),
-        size: LogicalSize::new(webview_frame.size.width, webview_frame.size.height).into(),
+        size: LogicalSize::new(view_frame.size.width, view_frame.size.height).into(),
       })
     }
   }
@@ -960,12 +996,24 @@ r#"Object.defineProperty(window, 'ipc', {
       let (width, height) = bounds.size.to_logical::<i32>(scale_factor).into();
 
       unsafe {
-        let parent_view = self.webview.superview().unwrap();
-        let frame = CGRect {
-          origin: window_position(&parent_view, x, y, height),
-          size: CGSize::new(width, height),
-        };
-        self.webview.setFrame(frame);
+        // Position the container view (if it exists), not the webview directly.
+        // The webview fills the container via auto-resize masks.
+        if let Some(container) = &self.parent_view {
+          let content_view = container.superview().unwrap();
+          let frame = CGRect {
+            origin: window_position(&content_view, x, y, height),
+            size: CGSize::new(width, height),
+          };
+          container.setFrame(frame);
+        } else {
+          // Fallback: position webview directly (legacy path)
+          let parent_view = self.webview.superview().unwrap();
+          let frame = CGRect {
+            origin: window_position(&parent_view, x, y, height),
+            size: CGSize::new(width, height),
+          };
+          self.webview.setFrame(frame);
+        }
       }
     }
 
@@ -973,6 +1021,12 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   pub fn set_visible(&self, visible: bool) -> Result<()> {
+    // For child webviews with a container, hide/show the container.
+    // This ensures docked inspector windows are also hidden when the tab is hidden.
+    #[cfg(target_os = "macos")]
+    if let Some(container) = &self.parent_view {
+      container.setHidden(!visible);
+    }
     self.webview.setHidden(!visible);
     Ok(())
   }
@@ -1303,11 +1357,19 @@ r#"Object.defineProperty(window, 'ipc', {
     use objc2_app_kit::NSWindowOrderingMode;
 
     unsafe {
-      if let Some(superview) = self.webview.superview() {
+      // For child webviews wrapped in a container, reorder the container.
+      // For main webviews, reorder the webview itself.
+      let view_to_reorder: &NSView = if let Some(container) = &self.parent_view {
+        container.as_ref()
+      } else {
+        &self.webview
+      };
+
+      if let Some(superview) = view_to_reorder.superview() {
         // addSubview:positioned:relativeTo: with nil reference and .Above
         // positions the view at the top of the z-order (frontmost)
         superview.addSubview_positioned_relativeTo(
-          &self.webview,
+          view_to_reorder,
           NSWindowOrderingMode::Above,
           None,
         );
@@ -1325,11 +1387,19 @@ r#"Object.defineProperty(window, 'ipc', {
     use objc2_app_kit::NSWindowOrderingMode;
 
     unsafe {
-      if let Some(superview) = self.webview.superview() {
+      // For child webviews wrapped in a container, reorder the container.
+      // For main webviews, reorder the webview itself.
+      let view_to_reorder: &NSView = if let Some(container) = &self.parent_view {
+        container.as_ref()
+      } else {
+        &self.webview
+      };
+
+      if let Some(superview) = view_to_reorder.superview() {
         // addSubview:positioned:relativeTo: with nil reference and .Below
         // positions the view at the bottom of the z-order (backmost)
         superview.addSubview_positioned_relativeTo(
-          &self.webview,
+          view_to_reorder,
           NSWindowOrderingMode::Below,
           None,
         );
