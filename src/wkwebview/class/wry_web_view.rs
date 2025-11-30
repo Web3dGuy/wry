@@ -136,9 +136,22 @@ define_class!(
     }
   }
 
-  // Synthetic mouse events
+  // Mouse events - focus transfer and synthetic events
   #[cfg(target_os = "macos")]
   impl WryWebView {
+    /// Override mouseDown: to transfer keyboard focus to this webview.
+    /// Without this, clicking on a webview doesn't make it the first responder,
+    /// so keyboard input continues going to the previously focused webview.
+    #[unsafe(method(mouseDown:))]
+    fn mouse_down(&self, event: &NSEvent) {
+      // Make this webview the first responder so it receives keyboard input
+      if let Some(window) = self.window() {
+        let _ = window.makeFirstResponder(Some(self));
+      }
+      // Call super to handle the actual mouse down event
+      unsafe { objc2::msg_send![super(self), mouseDown: event] }
+    }
+
     #[unsafe(method(otherMouseDown:))]
     fn other_mouse_down(&self, event: &NSEvent) {
       synthetic_mouse_events::other_mouse_down(self, event)
