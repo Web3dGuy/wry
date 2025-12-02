@@ -38,7 +38,9 @@ use objc2::{
   AllocAnyThread, DeclaredClass, MainThreadOnly, Message,
 };
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSApplication, NSAutoresizingMaskOptions, NSTitlebarSeparatorStyle, NSView};
+use objc2_app_kit::{
+  NSApplication, NSAutoresizingMaskOptions, NSColor, NSTitlebarSeparatorStyle, NSView,
+};
 #[cfg(target_os = "macos")]
 use objc2_core_foundation::CGSize;
 use objc2_core_foundation::{CGPoint, CGRect};
@@ -424,6 +426,23 @@ impl InnerWebView {
         };
         let webview: Retained<WryWebView> =
           objc2::msg_send![super(webview), initWithFrame: frame, configuration: &**config];
+
+        // Apply background color if specified
+        if let Some((red, green, blue, alpha)) = attributes.background_color {
+          let color = NSColor::colorWithSRGBRed_green_blue_alpha(
+            red as f64 / 255.0,
+            green as f64 / 255.0,
+            blue as f64 / 255.0,
+            alpha as f64 / 255.0,
+          );
+
+          // Set the webview's background color using key-value coding
+          // Note: On macOS, WKWebView uses _setDrawsBackground and backgroundColor via msg_send
+          let no = NSNumber::numberWithBool(false);
+          let _: () = objc2::msg_send![&*webview, setValue: &*no, forKey: ns_string!("drawsBackground")];
+          let _: () = objc2::msg_send![&*webview, setBackgroundColor: &*color];
+        }
+
         webview
       };
       #[cfg(target_os = "ios")]
@@ -511,6 +530,19 @@ impl InnerWebView {
 
       if !attributes.visible {
         webview.setHidden(true);
+      }
+
+      // Apply initial opacity if specified
+      if let Some(opacity) = attributes.opacity {
+        let opacity = opacity.clamp(0.0, 1.0) as f64;
+        #[cfg(target_os = "macos")]
+        {
+          webview.setAlphaValue(opacity);
+        }
+        #[cfg(target_os = "ios")]
+        {
+          webview.setAlpha(opacity);
+        }
       }
 
       #[cfg(any(debug_assertions, feature = "devtools"))]
@@ -951,6 +983,48 @@ r#"Object.defineProperty(window, 'ipc', {
       // This has to be monitored as it may clash with isOpaque = true.
       // The webview background color may also applied too late so actually not that useful.
       self.webview.setBackgroundColor(Some(&color));
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe {
+      let (red, green, blue, alpha) = _background_color;
+
+      let color = NSColor::colorWithSRGBRed_green_blue_alpha(
+        red as f64 / 255.0,
+        green as f64 / 255.0,
+        blue as f64 / 255.0,
+        alpha as f64 / 255.0,
+      );
+
+      // Disable background drawing and set color via msg_send
+      let no = NSNumber::numberWithBool(false);
+      let _: () = objc2::msg_send![&*self.webview, setValue: &*no, forKey: ns_string!("drawsBackground")];
+      let _: () = objc2::msg_send![&*self.webview, setBackgroundColor: &*color];
+    }
+
+    Ok(())
+  }
+
+  pub fn set_opacity(&self, opacity: f32) -> Result<()> {
+    let opacity = opacity.clamp(0.0, 1.0) as f64;
+
+    #[cfg(target_os = "macos")]
+    unsafe {
+      // For child webviews with a container, set opacity on the container.
+      // Also reset the webview's own alpha to 1.0 since it may have been set
+      // to 0.0 during creation (before the container existed).
+      if let Some(container) = &self.parent_view {
+        container.setAlphaValue(opacity);
+        // Reset webview alpha to 1.0 so container controls overall opacity
+        self.webview.setAlphaValue(1.0);
+      } else {
+        self.webview.setAlphaValue(opacity);
+      }
+    }
+
+    #[cfg(target_os = "ios")]
+    unsafe {
+      self.webview.setAlpha(opacity);
     }
 
     Ok(())

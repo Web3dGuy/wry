@@ -1718,6 +1718,11 @@ impl InnerWebView {
     unsafe { set_background_color(&self.controller, background_color) }
   }
 
+  pub fn set_opacity(&self, _opacity: f32) -> Result<()> {
+    // Not implemented on Windows
+    Ok(())
+  }
+
   pub fn set_memory_usage_level(&self, level: MemoryUsageLevel) -> Result<()> {
     let webview = self.webview.cast::<ICoreWebView2_19>()?;
     // https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2memoryusagetargetlevel

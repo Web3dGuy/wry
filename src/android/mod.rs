@@ -385,6 +385,11 @@ impl InnerWebView {
     Ok(())
   }
 
+  pub fn set_opacity(&self, _opacity: f32) -> Result<()> {
+    // Not implemented on Android
+    Ok(())
+  }
+
   pub fn load_url(&self, url: &str) -> Result<()> {
     MainPipe::send(WebViewMessage::LoadUrl(url.to_string(), None));
     Ok(())

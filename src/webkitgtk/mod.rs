@@ -768,6 +768,11 @@ impl InnerWebView {
     Ok(())
   }
 
+  pub fn set_opacity(&self, _opacity: f32) -> Result<()> {
+    // Not implemented on Linux
+    Ok(())
+  }
+
   pub fn load_url(&self, url: &str) -> Result<()> {
     self.webview.load_uri(url);
     Ok(())

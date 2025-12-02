@@ -180,6 +180,7 @@ objc2-app-kit = { version = "0.3.0", default-features = false, features = [
   "objc2-core-foundation",
   "NSApplication",
   "NSButton",
+  "NSColor",
   "NSControl",
   "NSEvent",
   "NSWindow",

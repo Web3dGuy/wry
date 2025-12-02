@@ -589,11 +589,18 @@ pub struct WebViewAttributes<'a> {
   ///
   /// ## Platform-specific:
   ///
-  /// - **macOS**: Not implemented.
   /// - **Windows**:
   ///   - On Windows 7, transparency is not supported and the alpha value will be ignored.
   ///   - On Windows higher than 7: translucent colors are not supported so any alpha value other than `0` will be replaced by `255`
   pub background_color: Option<RGBA>,
+
+  /// Set the opacity of the webview. Value should be between 0.0 (fully transparent) and 1.0 (fully opaque).
+  ///
+  /// ## Platform-specific:
+  ///
+  /// - **macOS / iOS**: Uses NSView/UIView's alphaValue.
+  /// - **Windows / Linux / Android**: Not implemented.
+  pub opacity: Option<f32>,
 
   /// Whether load the provided URL to [`WebView`].
   ///
@@ -850,6 +857,7 @@ impl Default for WebViewAttributes<'_> {
       visible: true,
       transparent: false,
       background_color: None,
+      opacity: None,
       url: None,
       headers: None,
       html: None,
@@ -967,12 +975,24 @@ impl<'a> WebViewBuilder<'a> {
   ///
   /// ## Platfrom-specific:
   ///
-  /// - **macOS**: Not implemented.
   /// - **Windows**:
   ///   - on Windows 7, transparency is not supported and the alpha value will be ignored.
   ///   - on Windows higher than 7: translucent colors are not supported so any alpha value other than `0` will be replaced by `255`
   pub fn with_background_color(mut self, background_color: RGBA) -> Self {
     self.attrs.background_color = Some(background_color);
+    self
+  }
+
+  /// Set the initial opacity of the webview.
+  ///
+  /// Value should be between 0.0 (fully transparent) and 1.0 (fully opaque).
+  ///
+  /// ## Platform-specific:
+  ///
+  /// - **macOS / iOS**: Uses NSView/UIView's alphaValue.
+  /// - **Windows / Linux / Android**: Not implemented.
+  pub fn with_opacity(mut self, opacity: f32) -> Self {
+    self.attrs.opacity = Some(opacity.clamp(0.0, 1.0));
     self
   }
 
@@ -2172,12 +2192,23 @@ impl WebView {
   ///
   /// ## Platfrom-specific:
   ///
-  /// - **macOS**: Not implemented.
   /// - **Windows**:
   ///   - On Windows 7, transparency is not supported and the alpha value will be ignored.
   ///   - On Windows higher than 7: translucent colors are not supported so any alpha value other than `0` will be replaced by `255`
   pub fn set_background_color(&self, background_color: RGBA) -> Result<()> {
     self.webview.set_background_color(background_color)
+  }
+
+  /// Set the opacity of the webview.
+  ///
+  /// Value should be between 0.0 (fully transparent) and 1.0 (fully opaque).
+  ///
+  /// ## Platform-specific:
+  ///
+  /// - **macOS / iOS**: Uses NSView/UIView's alphaValue.
+  /// - **Windows / Linux / Android**: Not implemented.
+  pub fn set_opacity(&self, opacity: f32) -> Result<()> {
+    self.webview.set_opacity(opacity)
   }
 
   /// Navigate to the specified url
