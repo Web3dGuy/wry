@@ -1749,39 +1749,43 @@ impl InnerWebView {
 
   /// Brings this webview to the front of the z-order.
   ///
-  /// TODO: Implement using SetWindowPos with HWND_TOP
-  /// ```ignore
-  /// unsafe {
-  ///   SetWindowPos(
-  ///     self.hwnd,
-  ///     HWND_TOP,
-  ///     0, 0, 0, 0,
-  ///     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-  ///   )?;
-  /// }
-  /// ```
+  /// Uses SetWindowPos with HWND_TOP to position the webview's HWND
+  /// at the top of the z-order among sibling windows.
+  ///
   /// See: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos
   pub fn bring_to_front(&self) -> Result<()> {
-    // Stub: Windows implementation pending
+    unsafe {
+      SetWindowPos(
+        self.hwnd,
+        Some(HWND_TOP),
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+      )?;
+    }
     Ok(())
   }
 
   /// Sends this webview to the back of the z-order.
   ///
-  /// TODO: Implement using SetWindowPos with HWND_BOTTOM
-  /// ```ignore
-  /// unsafe {
-  ///   SetWindowPos(
-  ///     self.hwnd,
-  ///     HWND_BOTTOM,
-  ///     0, 0, 0, 0,
-  ///     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-  ///   )?;
-  /// }
-  /// ```
+  /// Uses SetWindowPos with HWND_BOTTOM to position the webview's HWND
+  /// at the bottom of the z-order among sibling windows.
+  ///
   /// See: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos
   pub fn send_to_back(&self) -> Result<()> {
-    // Stub: Windows implementation pending
+    unsafe {
+      SetWindowPos(
+        self.hwnd,
+        Some(HWND_BOTTOM),
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+      )?;
+    }
     Ok(())
   }
 
