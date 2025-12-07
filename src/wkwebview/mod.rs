@@ -297,26 +297,6 @@ impl InnerWebView {
       // WebView and manager
       let manager = config.userContentController();
 
-      // Convert initial hit regions to CGRects in web coordinates (top-left origin)
-      #[cfg(target_os = "macos")]
-      let initial_hit_regions: Vec<(u64, CGRect)> = attributes
-        .hit_regions
-        .iter()
-        .enumerate()
-        .map(|(i, r)| {
-          // Get logical position/size (scale factor will be applied when we have the window)
-          let pos = r.position.to_logical::<f64>(1.0);
-          let size = r.size.to_logical::<f64>(1.0);
-          (
-            i as u64,
-            CGRect::new(
-              CGPoint::new(pos.x, pos.y),
-              CGSize::new(size.width, size.height),
-            ),
-          )
-        })
-        .collect();
-
       let webview = WryWebView::alloc(mtm).set_ivars(WryWebViewIvars {
         is_child,
         #[cfg(target_os = "macos")]
@@ -329,10 +309,6 @@ impl InnerWebView {
         #[cfg(target_os = "ios")]
         input_accessory_view_builder: pl_attrs.input_accessory_view_builder,
         custom_protocol_task_ids: Default::default(),
-        hit_test_mode: std::cell::Cell::new(attributes.hit_test_mode),
-        #[cfg(target_os = "macos")]
-        hit_regions: Mutex::new(initial_hit_regions),
-        hit_region_counter: std::sync::atomic::AtomicU64::new(attributes.hit_regions.len() as u64),
       });
 
       let _preference = config.preferences();
@@ -1505,9 +1481,11 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   /// Sets the hit-test mode for this webview.
+  ///
+  /// macOS stub - dynamic z-order replaces hit-test passthrough
   #[cfg(target_os = "macos")]
-  pub fn set_hit_test_mode(&self, mode: crate::HitTestMode) -> crate::Result<()> {
-    self.webview.ivars().hit_test_mode.set(mode);
+  pub fn set_hit_test_mode(&self, _mode: crate::HitTestMode) -> crate::Result<()> {
+    // macOS stub - dynamic z-order replaces hit-test passthrough
     Ok(())
   }
 
@@ -1515,48 +1493,23 @@ r#"Object.defineProperty(window, 'ipc', {
   ///
   /// iOS stub - not yet implemented.
   #[cfg(target_os = "ios")]
-  pub fn set_hit_test_mode(&self, mode: crate::HitTestMode) -> crate::Result<()> {
-    self.webview.ivars().hit_test_mode.set(mode);
-    // TODO: Implement iOS hit-test override
+  pub fn set_hit_test_mode(&self, _mode: crate::HitTestMode) -> crate::Result<()> {
+    // iOS stub - hit-test passthrough not implemented
     Ok(())
   }
 
   /// Gets the current hit-test mode.
   pub fn hit_test_mode(&self) -> crate::HitTestMode {
-    self.webview.ivars().hit_test_mode.get()
+    // Always return Normal mode - hit-test passthrough replaced by dynamic z-order
+    crate::HitTestMode::Normal
   }
 
   /// Sets the interactive regions for RegionBased mode.
+  ///
+  /// macOS stub - dynamic z-order replaces hit-test passthrough
   #[cfg(target_os = "macos")]
-  pub fn set_hit_regions(&self, regions: Vec<crate::Rect>) -> crate::Result<()> {
-    use std::sync::atomic::Ordering;
-
-    let cg_rects: Vec<(u64, CGRect)> = regions
-      .into_iter()
-      .enumerate()
-      .map(|(i, r)| {
-        // Convert logical coordinates to CGRect
-        // Regions use web coordinates (top-left origin)
-        let pos = r.position.to_logical::<f64>(1.0);
-        let size = r.size.to_logical::<f64>(1.0);
-        (
-          i as u64,
-          CGRect::new(
-            CGPoint::new(pos.x, pos.y),
-            CGSize::new(size.width, size.height),
-          ),
-        )
-      })
-      .collect();
-
-    // Update the counter to be past all assigned IDs
-    self
-      .webview
-      .ivars()
-      .hit_region_counter
-      .store(cg_rects.len() as u64, Ordering::SeqCst);
-
-    *self.webview.ivars().hit_regions.lock().unwrap() = cg_rects;
+  pub fn set_hit_regions(&self, _regions: Vec<crate::Rect>) -> crate::Result<()> {
+    // macOS stub - dynamic z-order replaces hit-test passthrough
     Ok(())
   }
 
@@ -1570,32 +1523,12 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   /// Adds a single interactive region and returns its ID.
+  ///
+  /// macOS stub - dynamic z-order replaces hit-test passthrough
   #[cfg(target_os = "macos")]
-  pub fn add_hit_region(&self, bounds: crate::Rect) -> crate::Result<crate::HitRegionId> {
-    use std::sync::atomic::Ordering;
-
-    let id = self
-      .webview
-      .ivars()
-      .hit_region_counter
-      .fetch_add(1, Ordering::SeqCst);
-
-    let pos = bounds.position.to_logical::<f64>(1.0);
-    let size = bounds.size.to_logical::<f64>(1.0);
-    let cg_rect = CGRect::new(
-      CGPoint::new(pos.x, pos.y),
-      CGSize::new(size.width, size.height),
-    );
-
-    self
-      .webview
-      .ivars()
-      .hit_regions
-      .lock()
-      .unwrap()
-      .push((id, cg_rect));
-
-    Ok(crate::HitRegionId(id))
+  pub fn add_hit_region(&self, _bounds: crate::Rect) -> crate::Result<crate::HitRegionId> {
+    // macOS stub - dynamic z-order replaces hit-test passthrough
+    Ok(crate::HitRegionId(0))
   }
 
   /// Adds a single interactive region and returns its ID.
@@ -1608,10 +1541,11 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   /// Removes a previously added region by ID.
+  ///
+  /// macOS stub - dynamic z-order replaces hit-test passthrough
   #[cfg(target_os = "macos")]
-  pub fn remove_hit_region(&self, id: crate::HitRegionId) -> crate::Result<()> {
-    let mut regions = self.webview.ivars().hit_regions.lock().unwrap();
-    regions.retain(|(region_id, _)| *region_id != id.0);
+  pub fn remove_hit_region(&self, _id: crate::HitRegionId) -> crate::Result<()> {
+    // macOS stub - dynamic z-order replaces hit-test passthrough
     Ok(())
   }
 
@@ -1625,9 +1559,11 @@ r#"Object.defineProperty(window, 'ipc', {
   }
 
   /// Clears all hit-test regions.
+  ///
+  /// macOS stub - dynamic z-order replaces hit-test passthrough
   #[cfg(target_os = "macos")]
   pub fn clear_hit_regions(&self) -> crate::Result<()> {
-    self.webview.ivars().hit_regions.lock().unwrap().clear();
+    // macOS stub - dynamic z-order replaces hit-test passthrough
     Ok(())
   }
 
